@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import subprocess
+import time
 import ctypes
 import pystray
 from PIL import Image
@@ -74,45 +75,57 @@ def activate_tunnel():
         return False, f"Activation failed: {e.stderr.decode()}"
 
 def deactivate_tunnel():
-    """Deactivate the tunnel."""
     try:
         subprocess.run([WG_EXE, '/uninstalltunnelservice', 'teleport'], check=True, capture_output=True)
-        return True, "Tunnel deactivated!"
+        
+        # Poll until service is gone or stopped
+        max_wait = 8.0
+        poll_interval = 0.8
+        elapsed = 0.0
+        while elapsed < max_wait:
+            if not is_tunnel_active():
+                return True, "Tunnel deactivated!"
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+        
+        return True, "Tunnel deactivation requested (status may take a moment to update)"
     except subprocess.CalledProcessError as e:
         if 'not found' in e.stderr.decode().lower():
             return False, "Tunnel not active."
         return False, f"Deactivation failed: {e.stderr.decode()}"
     
-def is_tunnel_active():
+def is_tunnel_active(retries=3, delay=1.0):
     """Check if the 'teleport' tunnel service is running (active)."""
-    try:
-        # Check Windows service state for WireGuardTunnel$teleport
-        result = subprocess.run(
-            ['sc', 'query', 'WireGuardTunnel$teleport'],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        output = result.stdout.lower()
+    for attempt in range(retries):
+        try:
+            result = subprocess.run(
+                ['sc', 'query', 'WireGuardTunnel$teleport'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            output = result.stdout.lower()
 
-        if result.returncode == 0:
-            # Service exists
-            if 'running' in output:
-                return True
-            if 'stopped' in output or '1  stopped' in output:
-                return False
-            # Other states (pending, etc.) → conservative: assume not active
+            if result.returncode == 0:
+                if 'running' in output:
+                    return True
+                if 'stopped' in output or '1  stopped' in output:
+                    return False
+                return False  # pending or unknown
+
+            return False  # service not found
+
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            logging.warning("Could not query service")
+            return False
+        except Exception as e:
+            logging.warning(f"Tunnel check failed: {str(e)}")
             return False
 
-        # Service not found (returncode != 0)
-        return False
+        # If we got here, retry after delay (helps catch post-uninstall lag)
+        time.sleep(delay)
 
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        logging.warning("Could not query service (timeout or sc not found)")
-        return False
-    except Exception as e:
-        logging.warning(f"Tunnel active check failed: {str(e)}")
-        return False
+    return False  # After all retries, assume not active
 
 def show_pin_dialog(and_activate=True):
     """Prompt for PIN, generate config, optionally activate."""
@@ -131,41 +144,6 @@ def show_pin_dialog(and_activate=True):
         else:
             messagebox.showerror("Error", f"Generation failed: {msg}")
 
-def show_edit_config():
-    """Edit the current config file."""
-    if not os.path.exists(CONFIG_PATH):
-        messagebox.showerror("Error", "No config to edit!")
-        return
-    with open(CONFIG_PATH, 'r') as f:
-        content = f.read()
-
-    root = tk.Tk()
-    root.withdraw()  # Hide root
-    win = Toplevel()
-    win.title("Edit Config")
-    win.geometry("600x400")
-
-    text = Text(win, wrap='word')
-    text.insert(END, content)
-    text.pack(side='left', fill='both', expand=True)
-
-    scrollbar = Scrollbar(win, command=text.yview)
-    scrollbar.pack(side='right', fill='y')
-    text.config(yscrollcommand=scrollbar.set)
-
-    def save():
-        with open(CONFIG_PATH, 'w') as f:
-            f.write(text.get(1.0, END))
-        messagebox.showinfo("Saved", "Config saved! Reconnect to apply changes.")
-        win.destroy()
-
-    tk.Button(win, text="Save & Close", command=save).pack(pady=10)
-    win.wait_window()  # Wait for window close
-    root.destroy()
-
-def on_enter_pin(icon, item):
-    show_pin_dialog(and_activate=True)
-
 def on_refresh_config(icon, item):
     if not os.path.exists(TOKEN_FILE):
         messagebox.showerror("Error", "No previous configuration. Enter a PIN first.")
@@ -174,11 +152,12 @@ def on_refresh_config(icon, item):
     if success:
         act_success, act_msg = activate_tunnel()
         messagebox.showinfo("Result", act_msg if act_success else f"Error: {act_msg}")
+        return act_success, act_msg
     else:
         messagebox.showerror("Error", f"Refresh failed: {msg}")
+        return success, msg
 
 def on_connect(icon, item):
-    
     if not os.path.exists(TOKEN_FILE):
         try:
             show_pin_dialog(and_activate=True)
@@ -186,11 +165,16 @@ def on_connect(icon, item):
         except Exception as e:
             return False, "Error Creating New Connection"
     else:
-        return activate_tunnel()
+        return on_refresh_config(icon=None, item=None)
 
 def on_disconnect(icon, item):
-    success, msg = deactivate_tunnel()
-    messagebox.showinfo("Tunnel", msg if success else f"Error: {msg}")
+    if not is_tunnel_active:
+        messagebox.showerror("Error", "No Teleport Tunnel is active")
+        return False, "No Teleport Tunnel is active"
+    else:
+        success, msg = deactivate_tunnel()
+        messagebox.showinfo("Tunnel", msg if success else f"Error: {msg}")
+        return success, msg
 
 def on_delete_config(icon, item):
     if messagebox.askyesno("Confirm", "Delete previous configuration and reset?"):
@@ -207,10 +191,6 @@ def on_delete_config(icon, item):
         except Exception as e:
             messagebox.showerror("Error", f"Deletion failed: {str(e)}")
             return False, "Error while deleting configuration"
-
-def on_exit(icon, item):
-    icon.stop()
-    sys.exit(0)
 
 def open_options_window(icon=None, item=None):
     """Opens a Tkinter window with dynamic, refreshable buttons."""
@@ -232,7 +212,7 @@ def open_options_window(icon=None, item=None):
         for widget in button_frame.winfo_children():
             widget.destroy()
 
-        tunnel_active = is_tunnel_active()
+        tunnel_active = is_tunnel_active(retries=4, delay=0.8)
 
         if not tunnel_active:
             # Show Connect when inactive or no tunnel
@@ -264,7 +244,7 @@ def open_options_window(icon=None, item=None):
             button_frame,
             text="Quit",
             width=25,
-            command=root.destroy  # Just close window
+            command=lambda: sys.exit(0)
         ).pack(pady=8)
 
     def action_and_refresh(action_func):
@@ -281,10 +261,10 @@ def open_options_window(icon=None, item=None):
     root.mainloop()
 
 def main():
-    run_elevated()
+    run_elevated()  # Keep admin elevation
 
-    if not os.path.exists(TOKEN_FILE):
-        show_pin_dialog(and_activate=True)
+    # Removed: no auto-PIN prompt or connection on launch
+    # User must left-click tray icon → open window → click Connect to trigger PIN if needed
 
     image = Image.open("tray-icon.ico")
 
@@ -295,10 +275,10 @@ def main():
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Delete Existing Configuration", on_delete_config),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Quit", on_exit)
+        pystray.MenuItem("Quit", lambda: [icon.stop(), sys.exit(0)])
     )
 
-    # Left-click: open the dynamic window
+    # Left-click opens the controls window
     icon = pystray.Icon(
         "AmpliFi Teleport",
         image,
