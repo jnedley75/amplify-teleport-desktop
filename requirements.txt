@@ -8,4 +8,5 @@ pystray>=0.19.5          # Core for creating/managing the Windows system tray ic
 pillow>=10.0.0           # Required by pystray for loading/processing the tray icon image (PIL.Image)
 pywin32>=306             # For Windows-specific features: admin elevation checks, registry (auto-start), notifications, etc.
 pyinstaller>=6.0         # To bundle everything into a single .exe (no Python install required for end users)
-win10toast>=0.9          # For better Windows toast notifications on connect/disconnect/errors
+win11toast>=0.36.3          # For better Windows toast notifications on connect/disconnect/errors
+plyer>=2.1.0

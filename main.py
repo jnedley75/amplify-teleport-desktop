@@ -1,52 +1,50 @@
-import os
-import argparse
+import asyncio
 import logging
+import os
+import sys
+import subprocess
+import time
+import ctypes
+import pystray
+from PIL import Image
 
-from teleport import generate_client_hint, get_device_token, connect_device
+from config import CONFIG_PATH, TOKEN_FILE, UUID_FILE, WG_EXE
+from tunnel import generate_config, activate_tunnel, deactivate_tunnel, is_tunnel_active
+from ui import custom_pin_dialog, custom_confirm_dialog, open_options_window
+from notifications import show_toast
 
-parser = argparse.ArgumentParser(description="Unofficial AmpliFi Teleport client")
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
 
-parser.add_argument("--pin",
-    help="PIN from the AmpliFi app, eg. AB123")
-parser.add_argument("--uuid-file", default="teleport_uuid",
-    help="File to store client UUID in. Can be shared between different tokens. (default: teleport_uuid)")
-parser.add_argument("--token-file", default="teleport_token_0",
-    help="File to store router token in (default: teleport_token_0)")
-parser.add_argument("--verbose", "-v", action="count")
+def run_elevated():
+    if not is_admin():
+        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
+        sys.exit(0)
 
-args = parser.parse_args()
+def main():
+    run_elevated()
 
-if args.verbose:
-    logging.basicConfig(level=logging.DEBUG)
+    image = Image.open("tray-icon.ico")
 
-if os.path.isfile(args.token_file):
-    if args.pin:
-        logging.error("Token file %s already exists, please choose a different "
-                        "output file if you want to generate a new token or omit --pin."
-                        % args.token_file)
-    else:
-        with open(args.token_file) as f:
-            deviceToken = f.readlines()[0]
+    menu = pystray.Menu(
+        pystray.MenuItem("Quit", lambda: [icon.stop(), sys.exit(0)])
+    )
 
-        print(connect_device(deviceToken))
-else:
-    if args.pin:
-        if os.path.isfile(args.uuid_file):
-            with open(args.uuid_file) as f:
-                clientHint = f.readlines()[0]
-        else:
-            with open(args.uuid_file, mode="w") as f:
-                clientHint = generate_client_hint()
-                f.write(clientHint)
+    icon = pystray.Icon(
+        "AmpliFi Teleport",
+        image,
+        "AmpliFi Teleport for Desktop",
+        menu=pystray.Menu(
+            pystray.MenuItem("Open Controls", lambda: open_options_window(icon), default=True, visible=False),
+            *menu.items
+        )
+    )
 
-        try:
-            deviceToken = get_device_token(clientHint, args.pin)
+    icon.run()
 
-            with open(args.token_file, mode="w") as f:
-                f.write(deviceToken)
-
-            print(connect_device(deviceToken))
-        except Exception as e:
-            logging.error(e)
-    else:
-        logging.error("Missing token file, please enter a new PIN using --pin.")
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    main()
