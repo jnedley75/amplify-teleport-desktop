@@ -36,7 +36,7 @@ LicenseFile=C:\Users\jnedl\Git Projects\amplify-teleport-desktop\LICENSE
 ;PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=C:\Users\jnedl\Git Projects\amplify-teleport-desktop
-OutputBaseFilename=AmplifiTeleportForDesktopInstaller
+OutputBaseFilename=Amplifi Teleport For Desktop Setup-{#MyAppVersion}
 SetupIconFile=C:\Users\jnedl\Git Projects\amplify-teleport-desktop\tray-icon.ico
 SolidCompression=yes
 WizardStyle=modern dynamic windows11
@@ -222,12 +222,8 @@ begin
   begin
     if IsWireGuardInstalled() then
     begin
-      // Always uninstall silently (change to prompt if preferred)
-      UninstallWireGuard();
-
-      // Or prompt the user:
-      // if MsgBox('Do you also want to uninstall WireGuard?', mbConfirmation, MB_YESNO) = IDYES then
-      //   UninstallWireGuard();
+      if MsgBox('Do you also want to uninstall WireGuard?', mbConfirmation, MB_YESNO) = IDYES then
+        UninstallWireGuard();
     end;
   end;
 end;
