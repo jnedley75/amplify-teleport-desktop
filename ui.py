@@ -1,11 +1,18 @@
+# Copyright (c) 2026 Jeff Nedley
+# Licensed under the MIT License (see LICENSE for details)
+
 import os
 import time
+import logging
+import sys
 
 import customtkinter as ctk
 
-from config import TOKEN_FILE, UUID_FILE, CONFIG_PATH
+from config import TOKEN_FILE, UUID_FILE, CONFIG_PATH, ICON_PATH
 from tunnel import generate_config, activate_tunnel, deactivate_tunnel, is_tunnel_active
 from notifications import show_toast
+
+logger = logging.getLogger("AmpliFi Teleport for Desktop")
 
 def custom_pin_dialog():
     """Custom PIN input dialog with centered label"""
@@ -14,6 +21,10 @@ def custom_pin_dialog():
     dialog.geometry("350x180")
     dialog.resizable(False, False)
     dialog.configure(fg_color="#181818")
+    dialog.iconbitmap(ICON_PATH)
+    
+    # Delete after customtkinter v5.3.0 comes out
+    dialog.after(300, lambda: dialog.iconbitmap(ICON_PATH))
     
     dialog.update_idletasks()
     width = dialog.winfo_width()
@@ -100,6 +111,10 @@ def custom_confirm_dialog(title, message):
     confirm_dialog.geometry("350x180")
     confirm_dialog.resizable(False, False)
     confirm_dialog.configure(fg_color="#181818")
+    confirm_dialog.iconbitmap(ICON_PATH)
+    
+    # Delete after customtkinter v5.3.0 comes out
+    confirm_dialog.after(300, lambda: confirm_dialog.iconbitmap(ICON_PATH))
     
     confirm_dialog.update_idletasks()
     width = confirm_dialog.winfo_width()
@@ -165,6 +180,7 @@ def open_options_window(icon=None, item=None):
     root.geometry("350x320")
     root.resizable(False, False)
     root.configure(bg="#181818")
+    root.iconbitmap(ICON_PATH)
     
     root.update_idletasks()
     width = root.winfo_width()
@@ -243,14 +259,14 @@ def open_options_window(icon=None, item=None):
             text="Quit",
             fg_color="#e74c3c",
             hover_color="#c0392b",
-            command=lambda: [icon.stop(), root.quit()],
+            command=lambda: [sys.exit(0)],
             **button_style
         ).pack(pady=10)
 
     def action_and_refresh(action_func):
         success, msg = action_func(icon=None, item=None)
 
-        time.sleep(1.0)
+        time.sleep(1.5)
 
         refresh_buttons()
 
@@ -288,6 +304,7 @@ def on_refresh_config(icon, item):
         show_toast("Status Update", "Teleport connected!")
         return act_success, act_msg
     else:
+        logger.error("Error While Refreshing Configuration for a New Connection", exc_info=True)
         show_toast("Error", f"Refresh failed: {msg}")
         return success, msg
 
@@ -297,6 +314,7 @@ def on_connect(icon, item):
             show_pin_dialog(and_activate=True)
             return True, "Successfully Created New Connection"
         except Exception as e:
+            logger.error("Error While Creating a New Connection", exc_info=True)
             return False, "Error Creating New Connection"
     else:
         return on_refresh_config(icon=None, item=None)
@@ -313,6 +331,7 @@ def on_disconnect(icon, item):
 def on_delete_config(icon, item):
     if custom_confirm_dialog("Confirm Deletion", "Delete previous Teleport configuration?"):
         try:
+            logger.debug("Disregard following deactivation error if any")
             deactivate_tunnel()
             if os.path.exists(TOKEN_FILE):
                 os.remove(TOKEN_FILE)
@@ -323,5 +342,6 @@ def on_delete_config(icon, item):
             show_toast("Config Update", "Existing configuration deleted!")
             return True, "Configuration Deleted"
         except Exception as e:
+            logger.error("Error While Deleting Existing Configuration", exc_info=True)
             show_toast("Error", f"Deletion failed: {str(e)}")
             return False, "Error while deleting configuration"

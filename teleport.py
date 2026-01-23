@@ -1,3 +1,7 @@
+# Original work Copyright (c) 2021 Alexander Henne
+# Modified work Copyright (c) 2026 Jeff Nedley
+# Licensed under the MIT License (see LICENSE for details)
+
 import asyncio
 import logging
 import requests
@@ -16,6 +20,8 @@ SIGNALING_URL = "https://client.amplifi.com/api/deviceToken/mlClientConnect"
 
 # Decides the device icon in the router control panel
 DEVICE_PLATFORM = "iOS"
+
+logger = logging.getLogger("AmpliFi Teleport for Desktop")
 
 def _generate_wg_keys():
     privateKey = subprocess.check_output(["wg", "genkey"],
@@ -54,7 +60,7 @@ def _get_remote_description(localDescription, deviceToken):
 
     iceConfigResponse = requests.post(ICE_CONFIG_URL, headers=headers)
 
-    logging.debug("Raw ICE config response: %s" % iceConfigResponse.text)
+    logger.debug("Raw ICE config response: %s" % iceConfigResponse.text)
 
     iceConfig = iceConfigResponse.json()
 
@@ -74,7 +80,7 @@ def _get_remote_description(localDescription, deviceToken):
         },
         headers=headers)
 
-    logging.debug("Raw connect response: %s" % connectResponse.text)
+    logger.debug("Raw connect response: %s" % connectResponse.text)
 
     answerAndSuccess = connectResponse.json()
 
@@ -92,14 +98,14 @@ def _generate_wg_config(pc, remoteDescription, privateKey):
     iceGatherer = iceTransport.iceGatherer
     connection = iceGatherer._connection
 
-    logging.debug("Nominated peers: %s" % connection._nominated)
+    logger.debug("Nominated peers: %s" % connection._nominated)
 
     if 1 not in connection._nominated:
         raise Exception("No nominated candidate peer")
 
     candidatePair = connection._nominated[1]
 
-    logging.debug("Chosen candidate pair: %s" % candidatePair)
+    logger.debug("Chosen candidate pair: %s" % candidatePair)
 
     localAddr = candidatePair.local_addr
     localPort = localAddr[1]
@@ -150,29 +156,29 @@ async def _connect_device_peer(pc, deviceToken):
     localDescription = _add_tunnel_info(
         pc.localDescription.sdp, deviceName, platform, publicKey)
 
-    logging.debug("Sending local description: %s" % localDescription)
+    logger.debug("Sending local description: %s" % localDescription)
 
     try:
         remoteDescription = _get_remote_description(localDescription, deviceToken)
 
-        logging.debug("Received remote description: %s" % remoteDescription)
+        logger.debug("Received remote description: %s" % remoteDescription)
 
         loop = asyncio.get_event_loop()
         configFuture = loop.create_future()
 
         @pc.on("iceconnectionstatechange")
         async def on_iceconnectionstatechange():
-            logging.debug("ICE connection state is %s" % pc.iceConnectionState)
+            logger.debug("ICE connection state is %s" % pc.iceConnectionState)
 
             if pc.iceConnectionState == "completed":
                 try:
                     wgConfig = _generate_wg_config(pc, remoteDescription, privateKey)
 
-                    logging.info("WireGuard config has been generated")
+                    logger.info("WireGuard config has been generated")
                     await pc.close()
                     configFuture.set_result(wgConfig)
                 except Exception as e:
-                    logging.error(e)
+                    logger.error(e)
                     await pc.close()
                     configFuture.set_exception(e)
 
@@ -180,7 +186,7 @@ async def _connect_device_peer(pc, deviceToken):
 
         return await configFuture
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
         await pc.close()
 
 def generate_client_hint():
@@ -194,7 +200,7 @@ def get_device_token(clientHint, pin):
         },
         headers=_make_request_headers(pin))
 
-    logging.debug("Raw client access response: %s" % clientAccessResponse.text)
+    logger.debug("Raw client access response: %s" % clientAccessResponse.text)
 
     deviceTokenAndSuccess = clientAccessResponse.json()
 

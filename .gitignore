@@ -1,2 +1,8 @@
 __pycache__/
 teleport_*
+build/
+dist/
+.venv/
+*.spec
+*.log
+*.exe

@@ -1,12 +1,14 @@
-# Original repo deps (keep these unchanged unless testing shows breakage)
-aiortc-datachannel-only==1.3.2.post3
-requests==2.28.2
-cryptography<39
+# Core dependencies (used across multiple files)
+customtkinter>=5.2.2                # for ctk (UI, dialogs)
+pystray>=0.19.5                     # for system tray icon
+Pillow>=10.0.0                      # for PIL.Image
+plyer>=2.1.0                        # for notifications (Windows toasts)
 
-# New deps for system tray, icon handling, Windows integration, and bundling
-pystray>=0.19.5          # Core for creating/managing the Windows system tray icon + menu
-pillow>=10.0.0           # Required by pystray for loading/processing the tray icon image (PIL.Image)
-pywin32>=306             # For Windows-specific features: admin elevation checks, registry (auto-start), notifications, etc.
-pyinstaller>=6.0         # To bundle everything into a single .exe (no Python install required for end users)
-win11toast>=0.36.3          # For better Windows toast notifications on connect/disconnect/errors
-plyer>=2.1.0
+# Networking, async, and WebRTC (from aiortc in teleport.py)
+requests>=2.28.0                    # for HTTP requests in get_device_token etc.
+aiortc>=1.3.0                       # for RTCPeerConnection, ICE, WebRTC
+aioice>=0.9.0                       # dependency of aiortc (ICE handling)
+
+# Optional / dev tools (if you use them)
+pyinstaller>=6.0.0                  # for bundling to .exe
+pywin32>=306                        # Windows-specific features

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Jeff Nedley
+# Licensed under the MIT License (see LICENSE for details)
+
 import subprocess
 import time
 import logging
@@ -5,6 +8,8 @@ import os
 
 from config import WG_EXE, CONFIG_PATH, TOKEN_FILE, UUID_FILE
 from teleport import connect_device, get_device_token, generate_client_hint
+
+logger = logging.getLogger("AmpliFi Teleport for Desktop")
 
 def generate_config(pin=None):
     """Generate configuration for Wireguard tunnel to Amplifi Teleport"""
@@ -31,6 +36,7 @@ def generate_config(pin=None):
         
         return True, config_str
     except Exception as e:
+        logger.error("Error While Creating a New Configuration", exc_info=True)
         return False, str(e)
 
 def activate_tunnel():
@@ -38,28 +44,31 @@ def activate_tunnel():
     if not os.path.exists(CONFIG_PATH):
         return False, "No config found. Generate one first."
     try:
-        subprocess.run([WG_EXE, '/uninstalltunnelservice', 'teleport'], capture_output=True)
-        subprocess.run([WG_EXE, '/installtunnelservice', CONFIG_PATH], check=True, capture_output=True)
+        subprocess.run([WG_EXE, '/uninstalltunnelservice', 'teleport'], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        subprocess.run([WG_EXE, '/installtunnelservice', CONFIG_PATH], check=True, capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
         return True, "Tunnel activated!"
     except subprocess.CalledProcessError as e:
+        logger.error("Error While Activating Tunnel Connection", exc_info=True)
         return False, f"Activation failed: {e.stderr.decode()}"
 
 def deactivate_tunnel():
     """Uninstall the Wireguard tunnel to deactivate the Amplifi Teleport connection."""
     try:
-        subprocess.run([WG_EXE, '/uninstalltunnelservice', 'teleport'], check=True, capture_output=True)
+        subprocess.run([WG_EXE, '/uninstalltunnelservice', 'teleport'], check=True, capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
         
         max_wait = 8.0
         poll_interval = 0.8
         elapsed = 0.0
         while elapsed < max_wait:
             if not is_tunnel_active():
+                logger.info("Tunnel successfully deactivated")
                 return True, "Tunnel deactivated!"
             time.sleep(poll_interval)
             elapsed += poll_interval
         
         return True, "Tunnel deactivation requested (status may take a moment to update)"
     except subprocess.CalledProcessError as e:
+        logger.error("Error While Deactivating Tunnel Connection", exc_info=True)
         if 'not found' in e.stderr.decode().lower():
             return False, "Tunnel not active."
         return False, f"Deactivation failed: {e.stderr.decode()}"
@@ -72,24 +81,29 @@ def is_tunnel_active(retries=3, delay=1.0):
                 ['sc', 'query', 'WireGuardTunnel$teleport'],
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=5, 
+                creationflags=subprocess.CREATE_NO_WINDOW
             )
             output = result.stdout.lower()
+            
+            logger.debug("WireGaurd Query output: %s", output)
 
             if result.returncode == 0:
                 if 'running' in output:
+                    logger.info("Teleport Tunnel is active")
                     return True
                 if 'stopped' in output or '1  stopped' in output:
+                    logger.info("Teleport Tunnel is stopped")
                     return False
                 return False
 
             return False
 
         except (subprocess.TimeoutExpired, FileNotFoundError):
-            logging.warning("Could not query service")
+            logger.warning("Error while checking for active tunnel", exc_info=True)
             return False
         except Exception as e:
-            logging.warning(f"Tunnel check failed: {str(e)}")
+            logger.warning("Error while checking for active tunnel", exc_info=True)
             return False
 
         time.sleep(delay)
