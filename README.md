@@ -5,6 +5,8 @@
 ## Disclaimer
 This is an **unofficial** tool — not affiliated with, endorsed by, or supported by Ubiquiti Inc. or AmpliFi. Use at your own risk.
 
+## Overview
+
 Generate WireGuard VPN configurations for AmpliFi routers with Teleport enabled — so you can securely access your home network from anywhere.
 
 This project started as a fork of an earlier community tool and has been completely rewritten with a modern, user-friendly interface, system tray integration, automatic reconnection support, and a clean GUI.
