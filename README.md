@@ -2,6 +2,9 @@
 
 **Unofficial desktop client for AmpliFi Teleport**
 
+## Disclaimer
+This is an **unofficial** tool — not affiliated with, endorsed by, or supported by Ubiquiti Inc. or AmpliFi. Use at your own risk.
+
 Generate WireGuard VPN configurations for AmpliFi routers with Teleport enabled — so you can securely access your home network from anywhere.
 
 This project started as a fork of an earlier community tool and has been completely rewritten with a modern, user-friendly interface, system tray integration, automatic reconnection support, and a clean GUI.
@@ -29,7 +32,7 @@ Ubiquiti has not yet released an official desktop client for AmpliFi Teleport �
 
 ## Installation
 
-1. Go to the **[Releases page](https://github.com/JeffNedley/amplify-teleport-desktop/releases)**  
+1. Go to the **[Releases page](https://github.com/jeff-nedley/amplify-teleport-desktop/releases)**  
 2. Download the latest **.exe installer** (e.g. `AmpliFi Teleport For Desktop Setup.exe`)  
 3. Run the installer and follow the prompts  
 4. The application menu will appear and stay in your system tray (hidden icons area ↑) when the menu is closed with the X
