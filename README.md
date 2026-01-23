@@ -61,7 +61,7 @@ Ubiquiti has not yet released an official desktop client for AmpliFi Teleport â€
 
 ```bash
 # Clone repo
-git clone https://github.com/JeffNedley/amplify-teleport-desktop.git
+git clone https://github.com/jeff-nedley/amplify-teleport-desktop.git
 cd amplify-teleport-desktop
 
 # Install dependencies
